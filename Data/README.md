@@ -1,4 +1,4 @@
-# Data
+# data
 
 Primary dataset: Inside Airbnb, New York City listings data  
 Snapshot date: November 07, 2025
