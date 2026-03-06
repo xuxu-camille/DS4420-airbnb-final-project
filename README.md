@@ -7,6 +7,7 @@ How do neural networks and Bayesian regression models compare in predicting Airb
 
 ## Dataset
 Inside Airbnb, New York City listings data (November 07, 2025 snapshot).
+Download source: https://insideairbnb.com/get-the-data/
 
 ## Models
 1. OLS baseline
