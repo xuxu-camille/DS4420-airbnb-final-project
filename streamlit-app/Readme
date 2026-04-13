@@ -1,0 +1,45 @@
+# NYC Airbnb Price Prediction — DS4420 Final Project
+
+**Authors:** Meixu Chen & Yuetong Yin  
+**Course:** DS4420 Machine Learning/Data Mining 2, Spring 2026  
+**Instructor:** Dr. Eric Gerber, Northeastern University
+
+## App structure
+
+Two pages:
+1. **Overview** — project background, dataset stats, model cards, key findings, comparison table
+2. **Model Explorer** — three interactive tabs:
+   - Metric comparison (bar chart, selectable metric)
+   - Actual vs predicted scatter (toggle models on/off)
+   - Bayesian posterior coefficients (with 95% credible interval toggle)
+
+## Local setup
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+## Deploy to Streamlit Community Cloud (free, ~2 min)
+
+1. Push this folder to a **public GitHub repo**
+2. Go to https://share.streamlit.io → Sign in with GitHub → **New app**
+3. Select your repo, branch `main`, file path `app.py`
+4. Click **Deploy** — done!
+
+Your app will be live at `https://<your-app-name>.streamlit.app`
+
+## Deploy to Hugging Face Spaces (alternative)
+
+1. Create a new Space at https://huggingface.co/spaces
+2. Choose **Streamlit** as the SDK
+3. Upload `app.py` and `requirements.txt`
+4. The Space builds automatically
+
+## Files
+
+```
+app.py              # Main Streamlit application
+requirements.txt    # Python dependencies
+README.md           # This file
+```
