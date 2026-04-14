@@ -1,0 +1,405 @@
+---
+title: "Bayesian Linear Regression"
+subtitle: NYC Airbnb Price Prediction | DS4420 Final Project
+author: Meixu Chen, Yuetong Yin
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+set.seed(42)
+library(MASS)
+library(tidyverse)
+library(brms)
+
+```
+
+## Overview
+
+This notebook implements Bayesian linear regression from scratch in R.
+We use the **analytical posterior** — no sampling packages (no rstan, brms, etc.).
+
+The key difference from OLS: instead of a single point estimate for beta,
+we get a full posterior distribution, which lets us report credible intervals
+that capture uncertainty in our price predictions.
+
+---
+
+## 1. Load and clean data
+
+```{r load-data}
+## 1. Load prepared modeling data
+
+df <- read_csv("bayesian_model_data.csv", show_col_types = FALSE)
+cat("Rows:", nrow(df), "\n")
+print(names(df))
+
+# Use the prepared split exported from Python
+train <- df |> filter(split == "train")
+val   <- df |> filter(split == "validation")
+test  <- df |> filter(split == "test")
+
+cat(sprintf("Train: %d | Val: %d | Test: %d\n", nrow(train), nrow(val), nrow(test)))
+
+```
+
+
+```{r }
+
+# Keep the same variables used in the Python linear baseline
+keep_cols <- c(
+  "log_price", "price",
+  "accommodates", "bedrooms", "bathrooms",
+  "room_type", "property_type", "minimum_nights",
+  "number_of_reviews", "review_scores_rating", "host_is_superhost"
+)
+
+train <- train |> dplyr::select(all_of(keep_cols))
+val   <- val   |> dplyr::select(all_of(keep_cols))
+test  <- test  |> dplyr::select(all_of(keep_cols))
+
+# Convert categorical variables
+train <- train |>
+  mutate(
+    room_type = factor(room_type),
+    property_type = factor(property_type),
+    host_is_superhost = factor(as.character(host_is_superhost))
+  )
+
+val <- val |>
+  mutate(
+    room_type = factor(room_type, levels = levels(train$room_type)),
+    property_type = factor(property_type, levels = levels(train$property_type)),
+    host_is_superhost = factor(as.character(host_is_superhost),
+                               levels = levels(train$host_is_superhost))
+  )
+
+test <- test |>
+  mutate(
+    room_type = factor(room_type, levels = levels(train$room_type)),
+    property_type = factor(property_type, levels = levels(train$property_type)),
+    host_is_superhost = factor(as.character(host_is_superhost),
+                               levels = levels(train$host_is_superhost))
+  )
+
+# Standardize numeric variables using training statistics only
+NUM_FEATS <- c(
+  "accommodates", "bedrooms", "bathrooms",
+  "minimum_nights", "number_of_reviews", "review_scores_rating"
+)
+
+train_means <- sapply(train[, NUM_FEATS], mean)
+train_sds   <- sapply(train[, NUM_FEATS], sd)
+train_sds[train_sds == 0] <- 1
+
+for (col in NUM_FEATS) {
+  train[[col]] <- (train[[col]] - train_means[col]) / train_sds[col]
+  val[[col]]   <- (val[[col]]   - train_means[col]) / train_sds[col]
+  test[[col]]  <- (test[[col]]  - train_means[col]) / train_sds[col]
+}
+```
+
+## 3. Build design matrix
+
+```{r design-matrix}
+# Same feature structure as the Python linear baseline
+feature_formula <- log_price ~ accommodates + bedrooms + bathrooms +
+  room_type + property_type + minimum_nights +
+  number_of_reviews + review_scores_rating + host_is_superhost
+
+X_train <- model.matrix(feature_formula, data = train)
+X_val   <- model.matrix(feature_formula, data = val)
+X_test  <- model.matrix(feature_formula, data = test)
+
+y_train <- train$log_price
+y_val   <- val$log_price
+y_test  <- test$log_price
+
+cat("Design matrix:\n")
+cat(sprintf("  Train: %d x %d\n", nrow(X_train), ncol(X_train)))
+cat(sprintf("  Val:   %d x %d\n", nrow(X_val), ncol(X_val)))
+cat(sprintf("  Test:  %d x %d\n", nrow(X_test), ncol(X_test)))
+```
+
+## 4. Bayesian linear regression — analytical posterior
+
+For Bayesian linear regression with a normal prior on beta,
+the posterior has a closed-form solution. This is exact, not approximate.
+
+**Prior:** beta ~ N(0, tau^2 * I), where tau = 10
+
+**Posterior mean and covariance:**
+```{r bayesian-posterior}
+tau2 <- 100
+p    <- ncol(X_train)
+
+# OLS estimate for sigma initialization
+beta_ols  <- as.vector(ginv(t(X_train) %*% X_train) %*% t(X_train) %*% y_train)
+sigma_est <- sd(y_train - X_train %*% beta_ols)
+sigma2    <- sigma_est^2
+
+cat(sprintf("Estimated sigma: %.4f\n", sigma_est))
+
+A          <- t(X_train) %*% X_train + (sigma2 / tau2) * diag(p)
+A_inv      <- ginv(A)
+mu_post    <- as.vector(A_inv %*% t(X_train) %*% y_train)
+Sigma_post <- sigma2 * A_inv
+
+cat("Posterior computed successfully.\n")
+
+```
+
+## 5. Posterior coefficient summary
+
+```{r coef-summary}
+# 95% credible interval for each coefficient: mean +/- 1.96 * sd
+post_sd <- sqrt(diag(Sigma_post))
+
+coef_summary <- data.frame(
+  feature = colnames(X_train),
+  mean    = mu_post,
+  sd      = post_sd,
+  lower95 = mu_post - 1.96 * post_sd,
+  upper95 = mu_post + 1.96 * post_sd
+) |> arrange(desc(abs(mean)))
+
+coef_summary[, -1] <- round(coef_summary[, -1], 4)
+print(coef_summary)
+```
+
+## 6. Draw samples from posterior and make predictions
+
+```{r posterior-predict}
+n_draws <- 2000
+
+# Draw beta samples from posterior
+beta_samples <- mvrnorm(n = n_draws, mu = mu_post, Sigma = Sigma_post)
+
+# Predictions on validation set
+pred_mat_val <- X_val %*% t(beta_samples)
+pred_mat_val <- pred_mat_val + matrix(
+  rnorm(nrow(X_val) * n_draws, 0, sigma_est),
+  nrow = nrow(X_val)
+)
+
+val_pred_mean <- rowMeans(pred_mat_val)
+val_ci_lower  <- apply(pred_mat_val, 1, quantile, 0.025)
+val_ci_upper  <- apply(pred_mat_val, 1, quantile, 0.975)
+
+# Predictions on test set
+pred_mat_test <- X_test %*% t(beta_samples)
+pred_mat_test <- pred_mat_test + matrix(
+  rnorm(nrow(X_test) * n_draws, 0, sigma_est),
+  nrow = nrow(X_test)
+)
+
+test_pred_mean <- rowMeans(pred_mat_test)
+test_ci_lower  <- apply(pred_mat_test, 1, quantile, 0.025)
+test_ci_upper  <- apply(pred_mat_test, 1, quantile, 0.975)
+
+cat("Predictions done.\n")
+```
+
+## 7. Evaluation metrics
+
+```{r evaluation}
+calc_metrics <- function(actual_log, pred_log, lower = NULL, upper = NULL) {
+  resid <- actual_log - pred_log
+  
+  mae  <- mean(abs(resid))
+  rmse <- sqrt(mean(resid^2))
+  r2   <- 1 - sum(resid^2) / sum((actual_log - mean(actual_log))^2)
+  
+  actual_price <- exp(actual_log)
+  pred_price   <- exp(pred_log)
+  
+  mae_price  <- mean(abs(actual_price - pred_price))
+  rmse_price <- sqrt(mean((actual_price - pred_price)^2))
+  
+  out <- tibble(
+    MAE_log = mae,
+    RMSE_log = rmse,
+    R2 = r2,
+    MAE_price = mae_price,
+    RMSE_price = rmse_price
+  )
+  
+  if (!is.null(lower) && !is.null(upper)) {
+    coverage  <- mean(actual_log >= lower & actual_log <= upper)
+    avg_width <- mean(upper - lower)
+    out <- out |>
+      mutate(CI_coverage = coverage, Avg_CI_width = avg_width)
+  }
+  
+  out
+}
+
+val_metrics  <- calc_metrics(y_val,  val_pred_mean,  val_ci_lower,  val_ci_upper)
+test_metrics <- calc_metrics(y_test, test_pred_mean, test_ci_lower, test_ci_upper)
+
+val_metrics
+test_metrics
+```
+
+## 8. Credible interval plot
+
+```{r ci-plot, fig.height=4, fig.width=10}
+set.seed(1)
+
+plot_df_ci <- tibble(
+  y_true   = y_test,
+  y_pred   = test_pred_mean,
+  ci_lower = test_ci_lower,
+  ci_upper = test_ci_upper
+)
+
+if (nrow(plot_df_ci) > 100) {
+  plot_df_ci <- plot_df_ci |> slice_sample(n = 100)
+}
+
+plot_df_ci <- plot_df_ci |>
+  arrange(y_true) |>
+  mutate(idx = row_number())
+
+ggplot(plot_df_ci, aes(x = idx)) +
+  geom_linerange(
+    aes(ymin = ci_lower, ymax = ci_upper),
+    color = "steelblue", alpha = 0.5, linewidth = 0.7
+  ) +
+  geom_point(aes(y = y_pred), color = "steelblue", size = 1.5) +
+  geom_point(aes(y = y_true), color = "black", size = 1, shape = 4) +
+  labs(
+    title = "Bayesian Predictions with 95% Credible Intervals",
+    subtitle = "Blue = posterior mean + CI | X = true log_price",
+    x = "Observation (sorted by true price)",
+    y = "log_price"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+
+plot_df_log <- tibble(
+  actual = y_test,
+  predicted = test_pred_mean
+)
+
+ggplot(plot_df_log, aes(x = actual, y = predicted)) +
+  geom_point(alpha = 0.2, size = 1.2, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Bayesian Regression: Actual vs Predicted (Log Scale)",
+    x = "Actual log_price",
+    y = "Predicted log_price"
+  ) +
+  theme_minimal()
+
+
+plot_df_price <- tibble(
+  actual = exp(y_test),
+  predicted = exp(test_pred_mean)
+)
+
+ggplot(plot_df_price, aes(x = actual, y = predicted)) +
+  geom_point(alpha = 0.2, size = 1.2, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Bayesian Regression: Actual vs Predicted (Price Scale)",
+    x = "Actual Price",
+    y = "Predicted Price"
+  ) +
+  theme_minimal()
+
+
+
+```
+
+
+```{r}
+
+ggplot(tibble(residual = y_test - test_pred_mean), aes(x = residual)) +
+  geom_histogram(bins = 60, fill = "coral", color = NA) +
+  labs(
+    title = "Bayesian Regression: Residual Distribution",
+    x = "Residual",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+set.seed(1)
+
+plot_df_ci <- tibble(
+  y_true   = y_test,
+  y_pred   = test_pred_mean,
+  ci_lower = test_ci_lower,
+  ci_upper = test_ci_upper
+)
+
+if (nrow(plot_df_ci) > 100) {
+  plot_df_ci <- plot_df_ci |> slice_sample(n = 100)
+}
+
+plot_df_ci <- plot_df_ci |>
+  arrange(y_true) |>
+  mutate(idx = row_number())
+
+
+
+```
+
+## 9. Coefficient credible interval plot
+
+```{r coef-plot, fig.height=9}
+coef_plot <- coef_summary |>
+  filter(feature != "bias") |>
+  arrange(mean)
+
+ggplot(coef_plot, aes(x = mean, y = reorder(feature, mean))) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+  geom_errorbarh(aes(xmin = lower95, xmax = upper95),
+                 height = 0.3, color = "steelblue", linewidth = 0.7) +
+  geom_point(color = "steelblue", size = 2) +
+  labs(
+    title = "Posterior mean and 95% credible intervals for each coefficient",
+    x     = "Coefficient value (log_price scale)",
+    y     = NULL
+  ) +
+  theme_minimal()
+```
+
+## 10. Comparison table
+
+Fill in OLS and NN results from the Python notebooks.
+
+```{r comparison-table}
+comparison <- tibble(
+  Metric = c(
+    "MAE (log)", "RMSE (log)", "R2",
+    "MAE ($)", "RMSE ($)", "95% CI coverage", "Avg CI width"
+  ),
+  OLS = c(
+    "0.3968", "0.4951", "0.5045",
+    "$72.40", "$110.31", "-", "-"
+  ),
+  Neural_Network = c(
+    "0.3009", "0.4054", "0.7261",
+    "$71.94", "$155.88", "-", "-"
+  ),
+  Bayesian = c(
+    round(test_metrics$MAE_log, 4),
+    round(test_metrics$RMSE_log, 4),
+    round(test_metrics$R2, 4),
+    paste0("$", round(test_metrics$MAE_price, 2)),
+    paste0("$", round(test_metrics$RMSE_price, 2)),
+    round(test_metrics$CI_coverage, 3),
+    round(test_metrics$Avg_CI_width, 4)
+  )
+)
+
+knitr::kable(comparison, caption = "Model comparison — test set")
+```
