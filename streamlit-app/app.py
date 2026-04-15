@@ -6,12 +6,11 @@ import plotly.express as px
 
 st.set_page_config(
     page_title="NYC Airbnb Price Prediction",
-    page_icon="🏙️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ── Custom CSS ──────────────────────────────────────────────────────────────
+# Custom CSS
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
@@ -45,11 +44,11 @@ h1, h2, h3 { font-family: 'DM Serif Display', serif !important; font-weight: 400
 </style>
 """, unsafe_allow_html=True)
 
-# ── Data ────────────────────────────────────────────────────────────────────
+# Data from what we already get
 MODEL_RESULTS = {
     "OLS (Manual)": {
         "mae_log": 0.3968, "rmse_log": 0.4951, "r2": 0.5045,
-        "mae_usd": 72.40,  "rmse_usd": 110.31,
+        "mae_usd": 72.40, "rmse_usd": 110.31,
         "ci_coverage": None, "ci_width": None,
         "color": "#1d9e75",
         "description": "Closed-form normal equations in NumPy — interpretable coefficients grounded in hedonic pricing theory.",
@@ -57,7 +56,7 @@ MODEL_RESULTS = {
     },
     "Neural Network": {
         "mae_log": 0.3009, "rmse_log": 0.4054, "r2": 0.7261,
-        "mae_usd": 71.94,  "rmse_usd": 155.88,
+        "mae_usd": 71.94, "rmse_usd": 155.88,
         "ci_coverage": None, "ci_width": None,
         "color": "#185fa5",
         "description": "Two-hidden-layer MLP in PyTorch with ReLU, dropout, Adam optimizer, and early stopping.",
@@ -65,7 +64,7 @@ MODEL_RESULTS = {
     },
     "Bayesian Regression": {
         "mae_log": 0.3969, "rmse_log": 0.4953, "r2": 0.5042,
-        "mae_usd": 72.37,  "rmse_usd": 110.00,
+        "mae_usd": 72.37, "rmse_usd": 110.00,
         "ci_coverage": 0.960, "ci_width": 1.968,
         "color": "#ba7517",
         "description": "Analytical posterior in R from scratch (no rstan/brms) — produces calibrated 95% credible intervals.",
@@ -74,36 +73,36 @@ MODEL_RESULTS = {
 }
 
 BAYESIAN_COEFS = pd.DataFrame([
-    {"feature": "accommodates",         "mean": 0.197,  "lower": 0.186, "upper": 0.208},
-    {"feature": "review_scores_rating", "mean": 0.055,  "lower": 0.047, "upper": 0.064},
-    {"feature": "bathrooms",            "mean": 0.037,  "lower": 0.027, "upper": 0.046},
-    {"feature": "number_of_reviews",    "mean": 0.016,  "lower": 0.008, "upper": 0.025},
-    {"feature": "bedrooms",             "mean": 0.003,  "lower": -0.008,"upper": 0.013},
-    {"feature": "host_is_superhost",    "mean": -0.058, "lower": -0.077,"upper": -0.039},
-    {"feature": "minimum_nights",       "mean": -0.068, "lower": -0.077,"upper": -0.060},
-    {"feature": "room: hotel room",     "mean": -0.247, "lower": -0.699,"upper": 0.206},
-    {"feature": "room: private room",   "mean": -0.177, "lower": -0.578,"upper": 0.225},
-    {"feature": "room: shared room",    "mean": -0.333, "lower": -1.020,"upper": 0.354},
+    {"feature": "accommodates", "mean": 0.197, "lower": 0.186, "upper": 0.208},
+    {"feature": "review_scores_rating", "mean": 0.055, "lower": 0.047, "upper": 0.064},
+    {"feature": "bathrooms", "mean": 0.037, "lower": 0.027, "upper": 0.046},
+    {"feature": "number_of_reviews", "mean": 0.016, "lower": 0.008, "upper": 0.025},
+    {"feature": "bedrooms", "mean": 0.003, "lower": -0.008, "upper": 0.013},
+    {"feature": "host_is_superhost", "mean": -0.058, "lower": -0.077, "upper": -0.039},
+    {"feature": "minimum_nights", "mean": -0.068, "lower": -0.077, "upper": -0.060},
+    {"feature": "room: hotel room", "mean": -0.247, "lower": -0.699, "upper": 0.206},
+    {"feature": "room: private room", "mean": -0.177, "lower": -0.578, "upper": 0.225},
+    {"feature": "room: shared room", "mean": -0.333, "lower": -1.020, "upper": 0.354},
 ]).sort_values("mean")
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
+# Sidebar plot
 st.sidebar.markdown("## Navigation")
-page = st.sidebar.radio("", ["🏠  Overview", "📊  Model Explorer"], label_visibility="collapsed")
+page = st.sidebar.radio("Navigation", ["Overview", "Model Explorer"], label_visibility="collapsed")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("**DS4420 Final Project · Spring 2026**")
 st.sidebar.markdown("Meixu Chen & Yuetong Yin")
-st.sidebar.markdown("Prof. Dr. Eric Gerber")
+st.sidebar.markdown("Professor: Dr. Eric Gerber")
 st.sidebar.markdown("Northeastern University")
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Data:** Inside Airbnb · NYC · Nov 7, 2025")
 st.sidebar.markdown("**Listings:** 20,772 (after cleaning)")
-st.sidebar.markdown("**Price range:** $9 – $815/night")
+st.sidebar.markdown("**Price range:** $$$9 –$$$815/night")
 
-# ════════════════════════════════════════════════════════════════════════════
-# PAGE 1 — OVERVIEW
-# ════════════════════════════════════════════════════════════════════════════
-if page == "🏠  Overview":
+
+# The first page: OVERVIEW
+
+if page == "Overview":
 
     st.markdown('<div class="hero-tag">DS4420 Machine Learning · Spring 2026</div>', unsafe_allow_html=True)
     st.title("Predicting NYC Airbnb Prices\nwith Three Models")
@@ -113,7 +112,7 @@ if page == "🏠  Overview":
         unsafe_allow_html=True
     )
 
-    # ── Summary metrics ───────────────────────────────────────────────────
+    # Summary metrics
     st.markdown("---")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Listings analyzed", "20,772", help="After cleaning & 97th-percentile outlier removal")
@@ -121,7 +120,7 @@ if page == "🏠  Overview":
     c3.metric("Best test R²", "0.726", help="Neural network on log-price scale")
     c4.metric("Bayesian CI coverage", "96.0%", help="95% credible interval empirical coverage on test set")
 
-    # ── Model cards ────────────────────────────────────────────────────────
+    # Model cards
     st.markdown("### The three approaches")
     cols = st.columns(3)
     for col, (name, info) in zip(cols, MODEL_RESULTS.items()):
@@ -138,30 +137,35 @@ if page == "🏠  Overview":
             if info["ci_coverage"]:
                 st.metric("CI coverage", f"{info['ci_coverage']:.1%}")
 
-    # ── Key findings ───────────────────────────────────────────────────────
+    # Key findings
     st.markdown("---")
     st.markdown("### Key findings")
 
     findings = [
-        ("🟢", "**Nonlinearity matters.** The neural network's R² of 0.726 substantially exceeds the linear models' ~0.504, confirming that NYC Airbnb pricing contains meaningful nonlinear structure — interactions across listing type, size, and host signals — that OLS cannot capture."),
-        ("🔵", "**Interpretability has real value.** OLS coefficients directly quantify each predictor's association with log-price. Accommodation capacity shows the strongest positive effect; shared-room listings are priced ~33% below the reference category on the log scale."),
-        ("🟡", "**Bayesian regression uniquely quantifies uncertainty.** With 95% credible interval coverage of 96.0% and an average width of 1.97 on the log-price scale, the Bayesian model provides calibrated uncertainty estimates that neither OLS nor the neural network can offer."),
-        ("🔴", "**The neural network struggles at the upper tail.** Despite better log-scale RMSE (0.405 vs 0.495), the NN's dollar-scale RMSE rises to $155.88 vs OLS's $110.31 — large errors on high-priced listings amplify on the original scale after exponentiation."),
+        ("1",
+         "Nonlinearity matters: The neural network's R² of 0.726 substantially exceeds the linear models' ~0.504, confirming that NYC Airbnb pricing contains meaningful nonlinear structure — interactions across listing type, size, and host signals — that OLS cannot capture."),
+        ("2",
+         "Interpretability has real value: OLS coefficients directly quantify each predictor's association with log-price. Accommodation capacity shows the strongest positive effect; shared-room listings are priced ~33% below the reference category on the log scale."),
+        ("3",
+         "Bayesian regression uniquely quantifies uncertainty: With 95% credible interval coverage of 96.0% and an average width of 1.97 on the log-price scale, the Bayesian model provides calibrated uncertainty estimates that neither OLS nor the neural network can offer."),
+        ("4",
+         "The neural network struggles at the upper tail: Despite better log-scale RMSE (0.405 vs 0.495), the NN's dollar-scale RMSE rises to $155.88 vs OLS's $110.31 — large errors on high-priced listings amplify on the original scale after exponentiation."),
     ]
     for icon, text in findings:
         st.markdown(f"<div class='finding-item'>{icon} &nbsp; {text}</div>", unsafe_allow_html=True)
 
-    # ── Full comparison table ──────────────────────────────────────────────
+    # Full comparison table
     st.markdown("---")
     st.markdown("### Full model comparison — test set")
 
     df_table = pd.DataFrame({
-        "Metric":          ["MAE (log)", "RMSE (log)", "R²", "MAE ($)", "RMSE ($)", "95% CI coverage", "Avg CI width (log)"],
-        "OLS":             [0.3968, 0.4951, 0.5045, "$72.40", "$110.31", "—", "—"],
-        "Neural Network":  [0.3009, 0.4054, 0.7261, "$71.94", "$155.88", "—", "—"],
-        "Bayesian":        [0.3969, 0.4953, 0.5042, "$72.37", "~$110",   "0.960", "1.968"],
+        "Metric": ["MAE (log)", "RMSE (log)", "R²", "MAE (USD)", "RMSE (USD)", "95% CI coverage", "Avg CI width (log)"],
+        "OLS": ["0.3968", "0.4951", "0.5045", "72.40", "110.31", "—", "—"],
+        "Neural Network": ["0.3009", "0.4054", "0.7261", "71.94", "155.88", "—", "—"],
+        "Bayesian": ["0.3969", "0.4953", "0.5042", "72.37", "110.00", "0.960", "1.968"],
     })
-    st.dataframe(df_table.set_index("Metric"), use_container_width=True)
+
+    st.dataframe(df_table.set_index("Metric"), width="stretch")
 
     st.markdown(
         "<div class='footer-note'>Data: Inside Airbnb, NYC snapshot Nov 7 2025. "
@@ -171,37 +175,47 @@ if page == "🏠  Overview":
     )
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# PAGE 2 — MODEL EXPLORER
-# ════════════════════════════════════════════════════════════════════════════
+
+# The second page : MODEL EXPLORER
+
 else:
     st.title("Model Performance Explorer")
     st.markdown("Interactively compare the three models and inspect Bayesian coefficient estimates.")
     st.markdown("---")
 
-    tab1, tab2, tab3 = st.tabs(["📈 Metric comparison", "🔵 Actual vs predicted", "📐 Bayesian coefficients"])
+    tab1, tab2, tab3 = st.tabs(["Graph 1: Metric comparison", "Graph 2: Actual vs predicted", "Graph 3: Bayesian coefficients"])
 
-    # ── Tab 1: Metric bar chart ────────────────────────────────────────────
+    # First Tab: Metric bar chart
     with tab1:
         st.markdown("#### Compare models by metric")
 
         metric_options = {
-            "R² (higher is better)":       ("r2",       True),
-            "MAE — log scale":             ("mae_log",  False),
-            "RMSE — log scale":            ("rmse_log", False),
-            "MAE — USD scale":             ("mae_usd",  False),
-            "RMSE — USD scale":            ("rmse_usd", False),
+            "R² (higher is better)": ("r2", True),
+            "MAE — log scale": ("mae_log", False),
+            "RMSE — log scale": ("rmse_log", False),
+            "MAE — USD scale": ("mae_usd", False),
+            "RMSE — USD scale": ("rmse_usd", False),
         }
 
         selected_label = st.selectbox("Select metric", list(metric_options.keys()))
         metric_key, higher_better = metric_options[selected_label]
 
-        names  = list(MODEL_RESULTS.keys())
+        names = list(MODEL_RESULTS.keys())
         values = [MODEL_RESULTS[m][metric_key] for m in names]
         colors_list = [MODEL_RESULTS[m]["color"] for m in names]
 
+
+        def hex_to_rgba(hex_color, alpha=1.0):
+            hex_color = hex_color.lstrip("#")
+            r, g, b = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+            return f"rgba({r},{g},{b},{alpha})"
+
+
         best_val = max(values) if higher_better else min(values)
-        bar_colors = [c if v == best_val else c + "77" for c, v in zip(colors_list, values)]
+        bar_colors = [
+            hex_to_rgba(c, 1.0) if v == best_val else hex_to_rgba(c, 0.45)
+            for c, v in zip(colors_list, values)
+        ]
 
         fig = go.Figure(go.Bar(
             x=names, y=values,
@@ -219,19 +233,19 @@ else:
             yaxis=dict(gridcolor="#f0f0f0"),
             xaxis=dict(showgrid=False),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # Dynamic insight
         insights = {
-            "R² (higher is better)":   "The neural network achieves R² = 0.726 — substantially outperforming OLS (0.505) and Bayesian (0.504). This gap reflects meaningful nonlinear structure in NYC pricing that linear methods cannot capture.",
-            "MAE — log scale":         "The neural network's log-scale MAE of 0.301 beats the linear models (~0.397). On the log scale, a MAE of ~0.30 corresponds to errors of roughly 35% of the listing price.",
-            "RMSE — log scale":        "Neural network RMSE 0.405 vs linear models' ~0.495. RMSE penalizes large errors more heavily, confirming the NN better handles the dense mid-range of the distribution.",
-            "MAE — USD scale":         "All three models cluster within $0.50 of each other on dollar MAE (~$72). The NN's log-scale superiority is diluted because the median listing is in a moderate price range.",
-            "RMSE — USD scale":        "The linear models ($110) beat the neural network ($156) here. The NN makes larger errors on expensive listings; these amplify after exponentiation from log scale back to dollars.",
+            "R² (higher is better)": "The neural network achieves R² = 0.726 — substantially outperforming OLS (0.505) and Bayesian (0.504). This gap reflects meaningful nonlinear structure in NYC pricing that linear methods cannot capture.",
+            "MAE — log scale": "The neural network's log-scale MAE of 0.301 beats the linear models (~0.397). On the log scale, a MAE of ~0.30 corresponds to errors of roughly 35% of the listing price.",
+            "RMSE — log scale": "Neural network RMSE 0.405 vs linear models' ~0.495. RMSE penalizes large errors more heavily, confirming the NN better handles the dense mid-range of the distribution.",
+            "MAE — USD scale": "All three models cluster within $0.50 of each other on dollar MAE (~$72). The NN's log-scale superiority is diluted because the median listing is in a moderate price range.",
+            "RMSE — USD scale": "The linear models ($110) beat the neural network ($156) here. The NN makes larger errors on expensive listings; these amplify after exponentiation from log scale back to dollars.",
         }
         st.info(insights[selected_label])
 
-    # ── Tab 2: Scatter plot ────────────────────────────────────────────────
+    # The second tab: Scatter plot
     with tab2:
         st.markdown("#### Actual vs predicted — log price scale")
         st.markdown("Illustrative scatter showing how tightly each model's predictions track actual log-prices.")
@@ -240,6 +254,7 @@ else:
         n = 200
         true_vals = np.random.normal(5.0, 0.7, n)
 
+
         def make_preds(true_vals, noise_std, bias_fn=None):
             noise = np.random.normal(0, noise_std, len(true_vals))
             preds = true_vals + noise
@@ -247,9 +262,10 @@ else:
                 preds += bias_fn(true_vals)
             return preds
 
+
         scatter_data = {
-            "OLS (Manual)":     make_preds(true_vals, 0.50),
-            "Neural Network":   make_preds(true_vals, 0.41),
+            "OLS (Manual)": make_preds(true_vals, 0.50),
+            "Neural Network": make_preds(true_vals, 0.41),
             "Bayesian Regression": make_preds(true_vals, 0.50, lambda x: np.random.normal(0, 0.02, len(x))),
         }
 
@@ -284,16 +300,17 @@ else:
             xaxis=dict(gridcolor="#f0f0f0"),
             yaxis=dict(gridcolor="#f0f0f0"),
         )
-        st.plotly_chart(fig2, use_container_width=True)
-        st.caption("Note: scatter points are illustrative — simulated to match each model's reported test-set RMSE. The neural network's tighter clustering reflects its higher R² of 0.726 vs ~0.504 for the linear models.")
+        st.plotly_chart(fig2, width="stretch")
+        st.caption(
+            "Note: scatter points are illustrative — simulated to match each model's reported test-set RMSE. The neural network's tighter clustering reflects its higher R² of 0.726 vs ~0.504 for the linear models.")
 
-    # ── Tab 3: Bayesian coefficients ───────────────────────────────────────
+    # The third tab graph: Bayesian coefficients
     with tab3:
         st.markdown("#### Bayesian posterior coefficients")
         st.markdown(
             "Posterior mean and 95% credible intervals for selected predictors. "
-            "Coefficients are on the **log-price scale** (i.e., a coefficient of +0.20 means "
-            "approximately +20% in listing price, all else equal)."
+            "Coefficients are on the log-price scale and a coefficient of +0.20 means "
+            "approximately +20% in listing price, all else equal."
         )
 
         df_coef = BAYESIAN_COEFS.copy()
@@ -345,19 +362,19 @@ else:
             xaxis=dict(gridcolor="#f0f0f0", zeroline=False),
             yaxis=dict(gridcolor="rgba(0,0,0,0)"),
         )
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width="stretch")
 
         st.markdown("**Coefficient table**")
-        df_display = df_coef[["feature","mean","lower","upper"]].rename(columns={
+        df_display = df_coef[["feature", "mean", "lower", "upper"]].rename(columns={
             "feature": "Predictor", "mean": "Posterior mean",
             "lower": "95% CI lower", "upper": "95% CI upper"
         }).sort_values("Posterior mean", ascending=False)
-        df_display[["Posterior mean","95% CI lower","95% CI upper"]] = \
-            df_display[["Posterior mean","95% CI lower","95% CI upper"]].round(4)
-        st.dataframe(df_display.set_index("Predictor"), use_container_width=True)
+        df_display[["Posterior mean", "95% CI lower", "95% CI upper"]] = \
+            df_display[["Posterior mean", "95% CI lower", "95% CI upper"]].round(4)
+        st.dataframe(df_display.set_index("Predictor"), width="stretch")
 
         st.info(
-            "**Key takeaway:** `accommodates` has the strongest and most precise positive effect (+0.197, narrow CI). "
-            "`minimum_nights` is reliably negative (−0.068). Room-type dummies have wide CIs reflecting sparse data "
+            "Key takeaway: Accommodates has the strongest and most precise positive effect (+0.197, narrow CI). "
+            "minimum_nights : is reliably negative (−0.068). Room-type dummies have wide CIs reflecting sparse data "
             "in some categories — intervals crossing zero indicate genuine uncertainty about that effect."
         )
